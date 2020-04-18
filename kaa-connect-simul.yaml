@@ -44,10 +44,16 @@ mqtt-subscriber:
 modbus-server:
   type: MODBUS-SERVER
   port: 9001
+  body: text/plain
 
 modbus-client:
   type: MODBUS-CLIENT
+  host: localhost
   port: 9001
+  offs: 0
+  blck: 6
+  data: read-holding-registers
+  body: text/plain
 
 tcp-server:
   type: TCP-SERVER

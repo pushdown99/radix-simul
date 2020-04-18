@@ -1,6 +1,9 @@
+'use strict'
+
 var express = require('express');
 var request = require('request');
 var moment  = require('moment');
+var modbus  = require("modbus-stream");
 var net     = require('net');
 var yaml    = require('js-yaml');
 var mysql   = require('mysql');
@@ -8,7 +11,7 @@ var mqtt    = require('mqtt');
 var fs      = require('fs');
 var path    = require('path');
 var argv    = require('minimist')(process.argv.slice(2));
-var file    = (argv['f'] == undefined)? './kaa-connect-simul.yaml' : argv['f'];
+var file    = (argv['f'] == undefined)? '/opt/radix/bin/kaa-connect-simul.yaml' : argv['f'];
 var dict    = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
 
 function getRandomInt(min, max) { 
@@ -16,11 +19,28 @@ function getRandomInt(min, max) {
 }
 
 const timeout = 5000
+const device  = 12345
+
+function getTemperature () {
+  return getRandomInt(18,20);
+}
+
+function getHumidity () {
+  return getRandomInt(40,60);
+}
+
+function getJson () {
+  return {"device": device, "temp":getRandomInt(18,20), "humi": getRandomInt(40,60)};
+}
+
+function getText () {
+  return device + "$" + getRandomInt(18,20) + "$" + getRandomInt(40,60);
+}
 
 function cbHttpRequest(element) {
   //console.log(moment().unix());
-  var json    = {"device": "12345", "temp":getRandomInt(18,20), "humi": getRandomInt(40,60)};
-  var text    = "12345$" + getRandomInt(18,20) + "$" + getRandomInt(40,60);
+  var json    = getJson();
+  var text    = getText();
   if(dict[element]["body"] == "json") {
     console.log("http|req : " + json)
     request.post("http://" + dict[element]["host"] + ":" + dict[element]["port"] + dict[element]["base"], {
@@ -31,7 +51,7 @@ function cbHttpRequest(element) {
         return
       }
       //console.log(`statusCode: ${res.statusCode}`)
-      console.log("http|res : " + body)
+      console.log("http|resp: " + body)
     })
   }
   else {
@@ -45,7 +65,7 @@ function cbHttpRequest(element) {
         return
       }
       //console.log(`statusCode: ${res.statusCode}`)
-      console.log("http|res : " + body)
+      console.log("http|resp: " + body)
     })
   }
 
@@ -55,8 +75,8 @@ function cbHttpRequest(element) {
 function cbMqttPublish (element) {
   //console.log(moment().unix());
   var pub = mqtt.connect("mqtt://" + dict[element]["host"] + ":" + dict[element]["port"] )
-  var json    = {"device": "12345", "temp":getRandomInt(18,20), "humi": getRandomInt(40,60)};
-  var text    = "12345$" + getRandomInt(18,20) + "$" + getRandomInt(40,60);
+  var json    = getJson();
+  var text    = getText();
   if(dict[element]["body"] == "json") {
     console.log("mqtt|pub : " + json)
     pub.publish(dict[element]["topic"], json)
@@ -72,7 +92,7 @@ function cbMqttPublish (element) {
 function cbTcpRequest (element) {
   var client = require('net').connect({host: dict[element]["host"], port: dict[element]["port"]});
   client.on('data', function (data) {
-    console.log("tcp |res : " + data)
+    console.log("tcp |resp: " + data)
     client.end();
   });
 
@@ -86,7 +106,7 @@ function cbUdpRequest (element) {
   var message = "GET";
 
   client.on('message', function(message, remote) {
-    console.log("udp |res : " + message)
+    console.log("udp |resp: " + message)
     client.close();
   });
 
@@ -95,6 +115,66 @@ function cbUdpRequest (element) {
   setTimeout(cbUdpRequest, timeout, element);
 }
 
+function cbModbusRequest (element) {
+  console.log("cbModbusRequest");
+  var host = dict[element]["host"]
+  var port = dict[element]["port"];
+  var data = dict[element]["data"]
+  var offs = dict[element]["offs"]
+  var blck = dict[element]["blck"]
+
+  console.log(data);
+  var client = require("modbus-stream").tcp.connect(port, host, {}, (err, connection) => {
+    if (data == "read-coils") {
+      console.log("mbus|req : readCoils");
+      connection.readCoils ({address: offs, quantity: blck}, (err, res) => {
+        if(err) console.log (err);
+        else    console.log (res.response);
+      });
+    }
+    if (data == "read-discrete-inputs") {
+      console.log("mbus|req : readDiscreteInputs");
+      connection.readDiscreteInputs ({address: offs, quantity: blck}, (err, res) => {
+        if(err) console.log (err);
+        else    console.log (res.response);
+      });
+    }
+    if (data == "read-input-registers") {
+      console.log("mbus|req : readInputRegisters");
+      connection.readInputRegisters ({address: offs, quantity: blck}, (err, res) => {
+        if(err) console.log (err);
+        else    console.log (res.response);
+      });
+    }
+    if (data == "read-holding-registers") {
+      console.log("mbus|req : readHoldingRegisters");
+      connection.readHoldingRegisters ({address: offs, quantity: blck}, (err, res) => {
+        if(err) console.log (err);
+        else    console.log (res.response);
+      });
+    }
+  });
+
+  setTimeout(cbModbusRequest, timeout, element);
+}
+
+function getModbusPdu (pdu) {
+  var code = pdu.readUInt8(0);
+  var address = pdu.readUInt16BE(1);
+  var quantity = pdu.readUInt16BE(3);
+  return { 'code': code, 'address': address, 'quantity': quantity };
+}
+
+function setModbusBuf () {
+  var buf = Buffer.alloc (4 * 3);
+
+  for (var i = 0; i < 3; i++) {
+    if (i == 0) buf.writeUInt32BE(device, 4 * i);
+    if (i == 1) buf.writeUInt32BE(getTemperature(), 4 * i);
+    if (i == 2) buf.writeUInt32BE(getHumidity(), 4 * i);
+  }
+  return buf;
+}
 
 var http    = express();
 
@@ -102,7 +182,7 @@ dict['services'].forEach(element => {
   if(dict[element]["type"] == "HTTP-SERVER") {
     var server = require('http').createServer(http);
     var port   = process.env.PORT || dict[element]["port"];
-    server.listen(port, () => { console.log('Server listening at port %d', port); });
+    server.listen(port, () => { console.log('http server listening at port %d', port); });
 
     http.use(express.text());
     http.use(express.urlencoded());
@@ -113,13 +193,13 @@ dict['services'].forEach(element => {
     http.engine('html', require('ejs').renderFile);
 
     http.get(dict[element]["base"], function(req, res){
-      var json    = {"device": "12345", "temp":getRandomInt(18,20), "humi": getRandomInt(40,60)};
-      var text    = "12345$" + getRandomInt(18,20) + "$" + getRandomInt(40,60);
+      var json    = getJson();
+      var text    = getText();
       if(dict[element]["body"] == "json") res.send(json);
       else                                res.send(text);
     })
     http.post("/", function(req, res){
-      console.log("http:post: " + req.body)
+      console.log("http|post: " + req.body)
       res.send(req.body);
     })
 
@@ -145,8 +225,8 @@ dict['services'].forEach(element => {
       //socket.on('data', function (data) { console.log("tcp |data:" + data); });
       //socket.on('error', function (err) { console.log(err); });
       //socket.on('end', function () { console.log("tcp |logs: disconnected"); });
-      var json    = {"device": "12345", "temp":getRandomInt(18,20), "humi": getRandomInt(40,60)};
-      var text    = "12345$" + getRandomInt(18,20) + "$" + getRandomInt(40,60);
+      var json    = getJson();
+      var text    = getText();
       if(dict[element]["body"] == "json") {
         console.log("tcp |data: " + json)
         socket.write(json);
@@ -158,7 +238,7 @@ dict['services'].forEach(element => {
       socket.end();
     });
     var port   = process.env.PORT || dict[element]["port"];
-    server.listen(port, () => { console.log('Server listening at port %d', port); });
+    server.listen(port, () => { console.log('tcp server listening at port %d', port); });
   }
   else if(dict[element]["type"] == "TCP-CLIENT") {
     cbTcpRequest (element);
@@ -170,8 +250,8 @@ dict['services'].forEach(element => {
     server.on('message', (msg, remote) => {
       var host = remote.address;
       var port = remote.port;
-      var json = {"device": "12345", "temp":getRandomInt(18,20), "humi": getRandomInt(40,60)};
-      var text = "12345$" + getRandomInt(18,20) + "$" + getRandomInt(40,60);
+      var json    = getJson();
+      var text    = getText();
 
       if(dict[element]["body"] == "json") {
         console.log("udp |data: " + json)
@@ -183,9 +263,41 @@ dict['services'].forEach(element => {
       }
     });
     server.bind(port);
+    console.log('udp server bind at port %d', port);
   }
   else if(dict[element]["type"] == "UDP-CLIENT") {
     cbUdpRequest(element);
+  }
+  else if(dict[element]["type"] == "MODBUS-SERVER") {
+    var port   = dict[element]["port"];
+    var server = modbus.tcp.server({}, (connection) => {
+      console.log('mbus|conn: connected');
+      connection.on("read-coils", (request, reply) => {
+        console.log("mbus|resp: read-coils");
+        reply(null, [ 1, 0, 1, 0, 1, 1, 0, 1 ]);
+      });
+      connection.on("read-discrete-inputs", (request, reply) => {
+        console.log("mbus|resp: read-discrete-inputs");
+        console.log(getModbusPdu (request.pdu));
+
+        reply(null, [ 1, 0, 1, 0, 1, 1, 0, 1 ]);
+      });
+      connection.on("read-holding-registers", (request, reply) => {
+        console.log("mbus|resp: read-holding-registers");
+        console.log(getModbusPdu (request.pdu));
+        reply(null, Buffer.from(setModbusBuf()));
+      });
+      connection.on("read-input-registers", (request, reply) => {
+        console.log("mbus|resp: read-input-registers");
+        console.log(getModbusPdu (request.pdu));
+        reply(null, Buffer.from(setModbusBuf()));
+      });
+    }).listen(port, () => {
+      console.log('modbus tcp server listening at port %d', port);
+    });
+  }
+  else if(dict[element]["type"] == "MODBUS-CLIENT") {
+    cbModbusRequest(element);
   }
 });
 
