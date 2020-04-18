@@ -1,0 +1,73 @@
+services:
+  - http-server
+  - mqtt-subscriber
+  - modbus-server
+  - tcp-server
+  - udp-server
+  - http-client
+  - mqtt-publisher
+  - modbus-client
+  - tcp-client
+  - udp-client
+
+http-server:
+  type: HTTP-SERVER
+  port: 9000
+  base: /root
+  body: text/plain
+
+http-client:
+  type: HTTP-CLIENT
+  host: debian.tric.kr
+  port: 9000
+  base: /
+  body: text/plain
+
+mqtt-publisher:
+  type: MQTT-PUBLISHER
+  host: radix-1.tric.kr
+  port: 1883
+  username: admin
+  password: admin123
+  topic: kaa/12
+  body: text/plain
+
+mqtt-subscriber:
+  type: MQTT-SUBSCRIBER
+  host: radix-1.tric.kr
+  port: 1883
+  username: admin
+  password: admin123
+  topic: kaa/12
+  body: text/plain
+
+modbus-server:
+  type: MODBUS-SERVER
+  port: 9001
+
+modbus-client:
+  type: MODBUS-CLIENT
+  port: 9001
+
+tcp-server:
+  type: TCP-SERVER
+  port: 9002
+  body: text/plain
+
+tcp-client:
+  type: TCP-CLIENT
+  host: localhost
+  port: 9002
+  body: text/plain
+
+udp-server:
+  type: UDP-SERVER
+  port: 9003
+  body: text/plain
+
+udp-client:
+  type: UDP-CLIENT
+  host: localhost
+  port: 9003
+  body: text/plain
+
