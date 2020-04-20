@@ -11,7 +11,8 @@ var mqtt    = require('mqtt');
 var fs      = require('fs');
 var path    = require('path');
 var argv    = require('minimist')(process.argv.slice(2));
-var file    = (argv['f'] == undefined)? '/opt/radix/bin/kaa-connect-simul.yaml' : argv['f'];
+//var file    = (argv['f'] == undefined)? '/opt/radix/bin/kaa-connect-simul.yaml' : argv['f'];
+var file    = (argv['f'] == undefined)? './kaa-connect-simul.yaml' : argv['f'];
 var dict    = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
 
 function getRandomInt(min, max) { 
@@ -90,26 +91,30 @@ function cbMqttPublish (element) {
 }
 
 function cbTcpRequest (element) {
-  var client = require('net').connect({host: dict[element]["host"], port: dict[element]["port"]});
+  var host = dict[element]["host"]
+  var port = dict[element]["port"]
+  var client = require('net').connect({host: host, port: port});
+
+  var message = (dict[element]["body"] == "json")? getJson(): getText();
+  client.write(message);
+  client.end();
+
+/*
   client.on('data', function (data) {
     console.log("tcp |resp: " + data)
     client.end();
   });
+*/
 
   setTimeout(cbTcpRequest, timeout, element);
 }
 
 function cbUdpRequest (element) {
-  var client = require('dgram').createSocket('udp4');
   var host = dict[element]["host"]
   var port = dict[element]["port"]
-  var message = "GET";
+  var client = require('dgram').createSocket('udp4');
 
-  client.on('message', function(message, remote) {
-    console.log("udp |resp: " + message)
-    client.close();
-  });
-
+  var message = (dict[element]["body"] == "json")? getJson(): getText();
   client.send(message, 0, message.length, port, host, null);
 
   setTimeout(cbUdpRequest, timeout, element);
@@ -303,6 +308,7 @@ dict['services'].forEach(element => {
 
 //var mymqtt = mqtt.connect('mqtt://radix-1.tric.kr')
 
+/*
 var db = mysql.createConnection({
   host     : 'localhost',
   user     : 'sqladmin',
@@ -314,4 +320,5 @@ db.connect();
 db.query("set time_zone='+9:00'", function (err, result) {
   if (err) console.log("[mysql] error - timezone");
 });
+*/
 

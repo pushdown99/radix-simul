@@ -1,19 +1,19 @@
 services:
-  - http-server
-  - mqtt-subscriber
-  - modbus-server
-  - tcp-server
-  - udp-server
-  - http-client
-  - mqtt-publisher
+#  - http-server
+#  - mqtt-subscriber
+#  - modbus-server
+#  - tcp-server
+#  - udp-server
+#  - http-client
+#  - mqtt-publisher
   - modbus-client
-  - tcp-client
-  - udp-client
+#  - tcp-client
+#  - udp-client
 
 http-server:
   type: HTTP-SERVER
   port: 9000
-  base: /root
+  base: /
   body: text/plain
 
 http-client:
@@ -25,7 +25,7 @@ http-client:
 
 mqtt-publisher:
   type: MQTT-PUBLISHER
-  host: radix-1.tric.kr
+  host: localhost
   port: 1883
   username: admin
   password: admin123
@@ -34,7 +34,7 @@ mqtt-publisher:
 
 mqtt-subscriber:
   type: MQTT-SUBSCRIBER
-  host: radix-1.tric.kr
+  host: localhost
   port: 1883
   username: admin
   password: admin123

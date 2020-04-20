@@ -1,0 +1,3 @@
+#!/bin/bash
+cp *.py ../bin
+cp *yaml ../yaml
